@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Retro Rhythm Snake - Boss Battle Polished</title>
+    <style>
+        :root {
+            --neon-green: #39ff14;
+            --neon-pink: #ff00ff;
+            --neon-blue: #00f2ff;
+            --neon-gold: #ffd700;
+            --neon-red: #ff0033;
+            --crt-bg: #050505;
+            --border-color: #222;
+            --glow-color: var(--neon-blue);
+        }
+
+        body {
+            background-color: #0a0a0a;
+            color: var(--neon-green);
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            text-transform: uppercase;
+        }
+
+        #game-container {
+            position: relative;
+            padding: 20px;
+            background: #000;
+            border: 8px solid var(--border-color);
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+            transition: border-color 0.3s, box-shadow 0.3s;
+            will-change: transform;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* 霓虹閃爍動畫 */
+        @keyframes neon-pulse {
+            0% { border-color: var(--border-color); box-shadow: 0 0 10px rgba(0,0,0,0.8); }
+            50% { border-color: var(--glow-color); box-shadow: 0 0 40px var(--glow-color); }
+            100% { border-color: var(--border-color); box-shadow: 0 0 20px rgba(0,0,0,0.8); }
+        }
+
+        .milestone-flash {
+            animation: neon-pulse 0.8s ease-out;
+        }
+
+        /* 畫面震動特效 */
+        @keyframes shake-hard {
+            10%, 90% { transform: translate3d(-2px, 2px, 0); }
+            20%, 80% { transform: translate3d(3px, -2px, 0); }
+            30%, 50%, 70% { transform: translate3d(-5px, 0, 0); }
+            40%, 60% { transform: translate3d(5px, 0, 0); }
+        }
+
+        @keyframes shake-low {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            10% { transform: translate(-1px, -2px) rotate(-1deg); }
+            20% { transform: translate(-3px, 0px) rotate(1deg); }
+            30% { transform: translate(3px, 2px) rotate(0deg); }
+            40% { transform: translate(1px, -1px) rotate(1deg); }
+            50% { transform: translate(-1px, 2px) rotate(-1deg); }
+            100% { transform: translate(1px, -2px) rotate(-1deg); }
+        }
+
+        .shake-hard { animation: shake-hard 0.3s cubic-bezier(.36,.07,.19,.97) both; }
+        .shake-constant { animation: shake-low 0.2s infinite; }
+
+        #game-container::after {
+            content: " ";
+            position: absolute;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%);
+            background-size: 100% 4px;
+            z-index: 5;
+            pointer-events: none;
+        }
+
+        canvas {
+            display: block;
+            background-color: var(--crt-bg);
+            border: 2px solid #333;
+            image-rendering: pixelated;
+        }
+
+        .hud {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            width: 400px;
+            margin-bottom: 5px;
+            font-size: 0.9rem;
+            text-shadow: 0 0 8px var(--neon-green);
+        }
+
+        .hud div:nth-child(2) { text-align: center; }
+        .hud div:nth-child(3) { text-align: right; }
+
+        .lives-container { color: var(--neon-pink); text-shadow: 0 0 8px var(--neon-pink); }
+        .shield-container { color: var(--neon-blue); text-shadow: 0 0 8px var(--neon-blue); transition: transform 0.2s; }
+        .shield-recharge { transform: scale(1.3); text-shadow: 0 0 20px var(--neon-blue); }
+
+        #boss-hp-bar {
+            width: 400px;
+            height: 10px;
+            background: #200;
+            border: 1px solid var(--neon-red);
+            margin: 10px 0;
+            display: none; /* 預設隱藏 */
+            box-shadow: 0 0 10px var(--neon-red);
+            position: relative;
+        }
+        #boss-hp-fill { height: 100%; background: var(--neon-red); width: 100%; transition: width 0.2s; }
+        #boss-label { position: absolute; width: 100%; text-align: center; font-size: 0.6rem; color: #fff; top: -12px; }
+
+        .progress-container {
+            width: 400px; height: 10px; background: #222; margin-top: 10px; border: 1px solid #444; position: relative;
+        }
+
+        #music-progress {
+            height: 100%; width: 0%; background: var(--neon-blue); box-shadow: 0 0 10px var(--neon-blue); transition: width 0.3s;
+        }
+
+        .overlay {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0, 0, 0, 0.95);
+            padding: 30px; text-align: center; border: 2px solid var(--neon-blue); z-index: 20; min-width: 320px; box-shadow: 0 0 30px var(--neon-blue);
+        }
+
+        button {
+            background: transparent; color: var(--neon-blue); border: 2px solid var(--neon-blue);
+            padding: 10px 20px; font-size: 1rem; font-family: inherit; cursor: pointer; margin-top: 15px; transition: 0.3s;
+        }
+        button:hover { background: var(--neon-blue); color: #000; box-shadow: 0 0 20px var(--neon-blue); }
+
+        input[type="text"] {
+            background: #111; border: 1px solid var(--neon-blue); color: #fff; padding: 8px; font-family: inherit; text-align: center; margin: 10px 0; width: 80%;
+        }
+
+        .leaderboard-table { width: 100%; margin-top: 15px; border-collapse: collapse; }
+        .leaderboard-table th { color: var(--neon-pink); font-size: 0.8rem; padding-bottom: 5px; }
+        .leaderboard-table td { padding: 5px; font-size: 0.9rem; }
+        .gold { color: var(--neon-gold); }
+
+        .status-msg {
+            position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%);
+            font-size: 0.7rem; color: var(--neon-red); font-weight: bold; z-index: 10; height: 1em;
+        }
+
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div class="hud">
+            <div>SCORE: <span id="score">000</span></div>
+            <div class="lives-container" id="lives-display">❤️x100</div>
+            <div>TIME: <span id="timer">00:00</span></div>
+        </div>
+        
+        <div class="hud" style="font-size: 0.7rem; margin-top: 0; opacity: 0.8;">
+            <span>Layer: <span id="layer-count">0</span>/60</span>
+            <div id="shield-ui-container" class="shield-container">WARP: <span id="shield-count">5</span></div>
+            <span>LEVEL: <span id="level-num">1</span></span>
+        </div>
+
+        <!-- 優化後的魔王血條位置 -->
+        <div id="boss-hp-bar">
+            <div id="boss-label">FINAL CORE INTEGRITY</div>
+            <div id="boss-hp-fill"></div>
+        </div>
+        
+        <canvas id="snakeCanvas" width="400" height="400"></canvas>
+        
+        <div class="progress-container">
+            <div id="music-progress"></div>
+        </div>
+
+        <div id="status-display" class="status-msg"></div>
+
+        <div id="start-screen" class="overlay">
+            <h1 style="color: var(--neon-pink); text-shadow: 0 0 15px var(--neon-pink);">NEON RHYTHM</h1>
+            <p>挑戰 60 層音樂並擊敗最終核心</p>
+            <p style="font-size: 0.8rem; color: #888;">[空白鍵] 啟動護盾 | 對準節奏回復</p>
+            <button id="start-btn">開始系統 (START)</button>
+        </div>
+
+        <div id="victory-screen" class="overlay hidden" style="border-color: var(--neon-gold); box-shadow: 0 0 30px var(--neon-gold);">
+            <h1 style="color: var(--neon-gold);">CORE DESTROYED!</h1>
+            <p>完成時間: <span id="clear-time">00:00</span></p>
+            <input type="text" id="player-name" placeholder="輸入玩家姓名" maxlength="10">
+            <br>
+            <button id="submit-score-btn">登錄名人堂</button>
+        </div>
+
+        <div id="leaderboard-screen" class="overlay hidden">
+            <h2 style="color: var(--neon-pink);">TOP 3 RECORDERS</h2>
+            <table class="leaderboard-table" id="leaderboard-body"></table>
+            <button id="restart-from-rank-btn">重新啟動系統</button>
+        </div>
+
+        <div id="game-over-screen" class="overlay hidden">
+            <h1 style="color: #ff4444;">SYSTEM FAILURE</h1>
+            <button id="restart-btn">重啟核心 (REBOOT)</button>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * 頂級電音進化引擎
+         */
+        class AudioEngine {
+            constructor() {
+                this.ctx = null;
+                this.bpm = 135;
+                this.stepDuration = (60 / this.bpm) / 4; 
+                this.currentStep = 0;
+                this.layer = 0;
+                this.isPlaying = false;
+                this.nextStepTime = 0;
+                this.kickPulse = 0; 
+            }
+
+            init() {
+                this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                this.masterGain = this.ctx.createGain();
+                this.masterGain.gain.value = 0.5;
+                this.limiter = this.ctx.createDynamicsCompressor();
+                this.limiter.connect(this.ctx.destination);
+                this.masterGain.connect(this.limiter);
+            }
+
+            synth(time, params) {
+                const osc = this.ctx.createOscillator();
+                const env = this.ctx.createGain();
+                const filter = this.ctx.createBiquadFilter();
+                osc.type = params.type || 'sine';
+                osc.frequency.setValueAtTime(params.freq, time);
+                if (params.freqEnd) osc.frequency.exponentialRampToValueAtTime(params.freqEnd, time + params.decay);
+                env.gain.setValueAtTime(params.vol, time);
+                env.gain.exponentialRampToValueAtTime(0.001, time + params.decay);
+                osc.connect(filter); filter.connect(env); env.connect(this.masterGain);
+                osc.start(time); osc.stop(time + params.decay);
+            }
+
+            scheduleStep(step, time) {
+                const L = this.layer;
+                if (L >= 1 && step % 4 === 0) this.synth(time, { type: 'square', freq: 60, vol: 0.1, decay: 0.1 });
+                if (L >= 6 && step % 4 === 0) {
+                    this.synth(time, { type: 'sine', freq: 150, freqEnd: 40, vol: 0.5, decay: 0.2 });
+                    this.kickPulse = 1.0; 
+                }
+                if (L >= 11 && step % 2 === 1) this.synth(time, { type: 'triangle', freq: 8000, vol: 0.05, decay: 0.04 });
+                if (L >= 21 && step % 2 === 0) this.synth(time, { type: 'sawtooth', freq: 55, vol: 0.1, decay: 0.15 });
+                if (L >= 31 && (step === 4 || step === 12)) this.synth(time, { type: 'square', freq: 200, vol: 0.2, decay: 0.2 });
+                if (L >= 41 && step % 1 === 0) this.synth(time, { type: 'triangle', freq: 440 + (step*20), vol: 0.08, decay: 0.1 });
+                if (L >= 56 && step % 16 === 0) this.synth(time, { type: 'sawtooth', freq: 110, vol: 0.2, decay: 1.5 });
+            }
+
+            scheduler() {
+                while (this.nextStepTime < this.ctx.currentTime + 0.1) {
+                    this.scheduleStep(this.currentStep, this.nextStepTime);
+                    this.nextStepTime += this.stepDuration;
+                    this.currentStep = (this.currentStep + 1) % 16;
+                }
+                if (this.isPlaying) requestAnimationFrame(() => this.scheduler());
+            }
+
+            start() {
+                if (!this.ctx) this.init();
+                this.isPlaying = true;
+                this.nextStepTime = this.ctx.currentTime;
+                this.scheduler();
+            }
+
+            stop() { this.isPlaying = false; }
+            playCollect() { this.synth(this.ctx.currentTime, { type: 'square', freq: 880, freqEnd: 1760, vol: 0.1, decay: 0.1 }); }
+            playDeath() { this.synth(this.ctx.currentTime, { type: 'sawtooth', freq: 150, freqEnd: 40, vol: 0.3, decay: 0.6 }); }
+            playWin() { this.synth(this.ctx.currentTime, { type: 'square', freq: 440, freqEnd: 880, vol: 0.2, decay: 0.5 }); }
+            playShield() { this.synth(this.ctx.currentTime, { type: 'triangle', freq: 100, freqEnd: 400, vol: 0.2, decay: 0.5 }); }
+            playBossHit() { this.synth(this.ctx.currentTime, { type: 'sawtooth', freq: 80, freqEnd: 200, vol: 0.4, decay: 0.2 }); }
+            playPowerUp() { this.synth(this.ctx.currentTime, { type: 'sine', freq: 400, freqEnd: 1000, vol: 0.1, decay: 0.3 }); }
+            playRecharge() { this.synth(this.ctx.currentTime, { type: 'sine', freq: 600, freqEnd: 1200, vol: 0.1, decay: 0.2 }); }
+        }
+
+        /**
+         * 遊戲核心邏輯
+         */
+        const container = document.getElementById('game-container');
+        const canvas = document.getElementById('snakeCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreEl = document.getElementById('score');
+        const layerEl = document.getElementById('layer-count');
+        const livesEl = document.getElementById('lives-display');
+        const shieldEl = document.getElementById('shield-count');
+        const shieldUIContainer = document.getElementById('shield-ui-container');
+        const timerEl = document.getElementById('timer');
+        const progressEl = document.getElementById('music-progress');
+        const statusDisplay = document.getElementById('status-display');
+        const bossHpBar = document.getElementById('boss-hp-bar');
+        const bossHpFill = document.getElementById('boss-hp-fill');
+
+        const gridSize = 20;
+        const tileCount = 20;
+        
+        let snake = [{x: 10, y: 10}];
+        let food = {x: 5, y: 5};
+        let obstacles = [];
+        let items = []; 
+        let enemy = { x: -1, y: -1, active: false };
+        let boss = { x: 8, y: 8, hp: 10, maxHp: 10, active: false, waves: [], moveCooldown: 0 };
+        
+        let dx = 0, dy = 0;
+        let score = 0;
+        let lives = 99; 
+        let shields = 5; 
+        let isGameOver = false, isInvincible = false, isGameClear = false;
+        let isTimeWarped = false; 
+        let magnetTimer = 0; 
+        let invincibilityTimer = null;
+        let perfectEffectTimer = 0; 
+        let gameLoop = null;
+        let baseSpeed = 120;
+        let speedBuffTimer = 0; 
+        let frameCount = 0;
+        let gameStartTime = 0;
+        let timerInterval;
+
+        const audio = new AudioEngine();
+
+        function initGame(fullReset = true) {
+            snake = [{x: 10, y: 10}];
+            dx = 0; dy = 0;
+            isGameOver = false; isInvincible = false; isGameClear = false;
+            isTimeWarped = false;
+            obstacles = [];
+            items = [];
+            enemy.active = false;
+            boss.active = false;
+            boss.hp = boss.maxHp;
+            boss.waves = [];
+            bossHpBar.style.display = 'none';
+            speedBuffTimer = 0;
+            magnetTimer = 0;
+            perfectEffectTimer = 0;
+            if (invincibilityTimer) clearTimeout(invincibilityTimer);
+            container.classList.remove('shake-hard', 'shake-constant', 'milestone-flash');
+
+            if (fullReset) {
+                score = 0; lives = 99; shields = 5; audio.layer = 0; baseSpeed = 120;
+                gameStartTime = Date.now();
+                startTimer();
+                container.style.setProperty('--glow-color', 'var(--neon-blue)');
+            }
+            generateLevelFeatures();
+            generateFood();
+            updateUI();
+        }
+
+        function startTimer() {
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                if (!isGameOver && !isGameClear && (dx !== 0 || dy !== 0)) {
+                    const elapsed = Math.floor((Date.now() - gameStartTime) / 1000);
+                    timerEl.innerText = formatTime(elapsed);
+                }
+            }, 1000);
+        }
+
+        function formatTime(seconds) {
+            return `${Math.floor(seconds/60).toString().padStart(2, '0')}:${(seconds%60).toString().padStart(2, '0')}`;
+        }
+
+        function generateFood() {
+            let fx = Math.floor(Math.random() * (tileCount - 4)) + 2;
+            let fy = Math.floor(Math.random() * (tileCount - 4)) + 2;
+            const onSnake = snake.some(s => s.x === fx && s.y === fy);
+            const nearObs = obstacles.some(o => Math.abs(o.x - fx) <= 1 && Math.abs(o.y - fy) <= 1);
+            const onBoss = boss.active && (fx >= boss.x && fx < boss.x + 3 && fy >= boss.y && fy < boss.y + 3);
+            if (onSnake || nearObs || onBoss) return generateFood();
+            food = { x: fx, y: fy };
+        }
+
+        function maybeSpawnItem() {
+            if (Math.random() > 0.15) return; 
+            let ix = Math.floor(Math.random() * (tileCount - 4)) + 2;
+            let iy = Math.floor(Math.random() * (tileCount - 4)) + 2;
+            const type = Math.random() > 0.5 ? 'magnet' : 'slowdown';
+            if (snake.some(s => s.x === ix && s.y === iy)) return;
+            items.push({ x: ix, y: iy, type: type, expire: 400 });
+        }
+
+        function triggerMilestoneEffect() {
+            container.classList.remove('milestone-flash');
+            void container.offsetWidth; 
+            container.classList.add('milestone-flash');
+            const hue = (audio.layer * 6) % 360;
+            container.style.setProperty('--glow-color', `hsl(${hue}, 100%, 50%)`);
+        }
+
+        function spawnBoss() {
+            boss.active = true;
+            boss.hp = boss.maxHp;
+            boss.x = 8; boss.y = 8;
+            boss.waves = [];
+            bossHpBar.style.display = 'block';
+            bossHpFill.style.width = '100%';
+            statusDisplay.innerText = "CRITICAL ERROR: FINAL CORE DETECTED";
+            triggerShake('hard', 800);
+        }
+
+        function generateLevelFeatures() {
+            const L = audio.layer;
+            if (L === 60 && !boss.active) {
+                spawnBoss();
+                return;
+            }
+            if (L >= 41 && L <= 50) {
+                obstacles = []; enemy.active = false;
+                statusDisplay.innerText = "BUFFER ZONE - SAFE AREA";
+                return;
+            }
+            if (L >= 51 && L < 60) {
+                obstacles = [];
+                const obsCount = Math.floor(Math.random() * 3) + 3;
+                for(let i=0; i < obsCount; i++) addRandomObstacle();
+                enemy.active = true;
+                statusDisplay.innerText = "CHAOS ZONE: DYNAMIC HAZARDS";
+                return;
+            }
+            if (L <= 30 && L > 0 && L % 5 === 0) {
+                const count = Math.floor(L / 5);
+                while (obstacles.length < count) addRandomObstacle();
+                triggerMilestoneEffect();
+            }
+            if (L >= 31 && L <= 40) {
+                spawnEnemy();
+                statusDisplay.innerText = "WARNING: ENEMY CHASING";
+            }
+        }
+
+        function addRandomObstacle() {
+            let ox = Math.floor(Math.random() * (tileCount - 4)) + 2;
+            let oy = Math.floor(Math.random() * (tileCount - 4)) + 2;
+            const onSnake = snake.some(s => s.x === ox && s.y === oy);
+            const overlap = obstacles.some(o => o.x === ox && o.y === oy);
+            if (onSnake || overlap) return addRandomObstacle();
+            obstacles.push({ x: ox, y: oy });
+        }
+
+        function spawnEnemy() {
+            const head = snake[0];
+            enemy.x = head.x < 10 ? 19 : 0;
+            enemy.y = head.y < 10 ? 19 : 0;
+            enemy.active = true;
+        }
+
+        function triggerShake(type, duration) {
+            container.classList.add(type === 'hard' ? 'shake-hard' : 'shake-constant');
+            setTimeout(() => container.classList.remove('shake-hard', 'shake-constant'), duration || 300);
+        }
+
+        function updateBoss() {
+            if (!boss.active) return;
+
+            boss.moveCooldown--;
+            if (boss.moveCooldown <= 0) {
+                boss.x = Math.floor(Math.random() * (tileCount - 4)) + 1;
+                boss.y = Math.floor(Math.random() * (tileCount - 4)) + 1;
+                boss.moveCooldown = 20 + Math.random() * 30;
+                boss.waves.push({ r: 0, maxR: 150 });
+            }
+
+            for (let i = boss.waves.length - 1; i >= 0; i--) {
+                const w = boss.waves[i];
+                w.r += 4;
+                if (w.r > w.maxR) {
+                    boss.waves.splice(i, 1);
+                    continue;
+                }
+                if (!isInvincible) {
+                    const headX = snake[0].x * gridSize + 10;
+                    const headY = snake[0].y * gridSize + 10;
+                    const bossCX = boss.x * gridSize + 30;
+                    const bossCY = boss.y * gridSize + 30;
+                    const dist = Math.sqrt((headX - bossCX)**2 + (headY - bossCY)**2);
+                    if (Math.abs(dist - w.r) < 12) {
+                        handleDeath();
+                    }
+                }
+            }
+        }
+
+        function triggerManualInvincibility() {
+            if (shields > 0 && !isGameOver && !isGameClear) {
+                shields--;
+                isInvincible = true;
+                isTimeWarped = true; 
+                audio.playShield();
+                statusDisplay.innerText = "TIME WARP ACTIVATED!";
+                updateUI();
+                if (invincibilityTimer) clearTimeout(invincibilityTimer);
+                invincibilityTimer = setTimeout(() => {
+                    isInvincible = false;
+                    isTimeWarped = false; 
+                }, 2000);
+            }
+        }
+
+        function handleDeath() {
+            audio.playDeath();
+            triggerShake('hard', 300); 
+            if (lives > 0) {
+                lives--; isInvincible = true; dx = 0; dy = 0;
+                updateUI();
+                if (invincibilityTimer) clearTimeout(invincibilityTimer);
+                invincibilityTimer = setTimeout(() => isInvincible = false, 2000);
+            } else endGame();
+        }
+
+        function update() {
+            if (isGameOver || isGameClear || (dx === 0 && dy === 0)) return;
+
+            const currentDelay = Math.max(40, baseSpeed - (audio.layer * 1.2));
+            const head = { x: snake[0].x + dx, y: snake[0].y + dy };
+            const hitWall = head.x < 0 || head.x >= tileCount || head.y < 0 || head.y >= tileCount;
+            const hitSelf = snake.some(s => s.x === head.x && s.y === head.y);
+            const hitObs = obstacles.some(o => o.x === head.x && o.y === head.y);
+
+            if (!isInvincible && (hitWall || hitSelf || hitObs)) {
+                handleDeath();
+                return;
+            }
+
+            if (isInvincible) {
+                if (head.x < 0) head.x = tileCount - 1; else if (head.x >= tileCount) head.x = 0;
+                if (head.y < 0) head.y = tileCount - 1; else if (head.y >= tileCount) head.y = 0;
+            }
+
+            snake.unshift(head);
+            updateBoss();
+
+            if (boss.active) {
+                if (head.x >= boss.x && head.x < boss.x + 3 && head.y >= boss.y && head.y < boss.y + 3) {
+                    boss.hp--;
+                    audio.playBossHit();
+                    triggerShake('hard', 400);
+                    bossHpFill.style.width = (boss.hp / boss.maxHp * 100) + '%';
+                    boss.x = Math.floor(Math.random() * (tileCount - 4)) + 1;
+                    boss.y = Math.floor(Math.random() * (tileCount - 4)) + 1;
+                    if (boss.hp <= 0) { winGame(); return; }
+                }
+            }
+
+            if (magnetTimer > 0) {
+                magnetTimer -= currentDelay;
+                const range = 6;
+                if (Math.abs(head.x - food.x) + Math.abs(head.y - food.y) < range) {
+                    if (food.x < head.x) food.x++; else if (food.x > head.x) food.x--;
+                    if (food.y < head.y) food.y++; else if (food.y > head.y) food.y--;
+                }
+                items.forEach(item => {
+                    if (Math.abs(head.x - item.x) + Math.abs(head.y - item.y) < range) {
+                        if (item.x < head.x) item.x++; else if (item.x > head.x) item.x--;
+                        if (item.y < head.y) item.y++; else if (item.y > head.y) item.y--;
+                    }
+                });
+                if (magnetTimer <= 0) statusDisplay.innerText = "";
+            }
+
+            for (let i = items.length - 1; i >= 0; i--) {
+                const item = items[i];
+                item.expire--;
+                if (item.expire <= 0) { items.splice(i, 1); continue; }
+                if (head.x === item.x && head.y === item.y) {
+                    audio.playPowerUp();
+                    if (item.type === 'magnet') { magnetTimer = 5000; statusDisplay.innerText = "MAGNET ON (5S)"; }
+                    else { baseSpeed *= 1.05; statusDisplay.innerText = "PERMANENT SPEED DOWN"; }
+                    items.splice(i, 1);
+                }
+            }
+
+            if (head.x === food.x && head.y === food.y) {
+                score++;
+                audio.playCollect();
+                if (audio.kickPulse > 0.7 && shields < 5) {
+                    shields++;
+                    perfectEffectTimer = 40;
+                    audio.playRecharge();
+                    shieldUIContainer.classList.add('shield-recharge');
+                    setTimeout(() => shieldUIContainer.classList.remove('shield-recharge'), 300);
+                }
+                if (audio.layer < 60) {
+                    audio.layer++;
+                    generateLevelFeatures();
+                    if (audio.layer % 5 === 0) triggerMilestoneEffect();
+                }
+                maybeSpawnItem();
+                generateFood();
+                updateUI();
+            } else {
+                snake.pop();
+            }
+
+            let finalDelay = currentDelay;
+            if (speedBuffTimer > 0) { finalDelay /= 2.5; speedBuffTimer--; }
+            if (isTimeWarped) finalDelay *= 4; 
+
+            clearInterval(gameLoop);
+            gameLoop = setInterval(update, finalDelay);
+        }
+
+        function draw() {
+            frameCount++;
+            ctx.fillStyle = '#050505'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 背景視覺化
+            const pulse = audio.kickPulse;
+            const hue = (audio.layer * 6) % 360;
+            for (let i = 0; i < 10; i++) {
+                const h = (pulse * 60) + Math.sin(frameCount * 0.2 + i) * 5; 
+                ctx.fillStyle = `hsla(${hue}, 100%, 50%, 0.1)`;
+                ctx.fillRect(i * 40 + 2, canvas.height - h, 36, h);
+            }
+            if (audio.kickPulse > 0) audio.kickPulse *= 0.92;
+
+            obstacles.forEach(o => {
+                ctx.fillStyle = (frameCount % 12 < 6) ? '#333' : '#ff0033';
+                ctx.shadowBlur = 10; ctx.shadowColor = '#ff0033';
+                ctx.fillRect(o.x*gridSize+2, o.y*gridSize+2, gridSize-4, gridSize-4);
+            });
+
+            items.forEach(item => {
+                if (Math.floor(frameCount / 10) % 2 === 0) {
+                    ctx.shadowBlur = 15;
+                    ctx.fillStyle = item.type === 'magnet' ? varColor('--neon-blue') : varColor('--neon-gold');
+                    ctx.font = 'bold 16px Arial'; ctx.textAlign = 'center';
+                    ctx.fillText(item.type === 'magnet' ? 'U' : '▼', item.x*gridSize + 10, item.y*gridSize + 16);
+                }
+            });
+
+            if (boss.active) {
+                const bGlow = (Math.sin(frameCount * 0.5) + 1) * 10;
+                ctx.shadowBlur = 20 + bGlow;
+                ctx.shadowColor = '#ff0033';
+                ctx.fillStyle = (frameCount % 4 < 2) ? '#fff' : '#ff0033';
+                ctx.fillRect(boss.x*gridSize+2, boss.y*gridSize+2, gridSize*3-4, gridSize*3-4);
+                ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+                ctx.strokeRect(boss.x*gridSize+8, boss.y*gridSize+8, gridSize*3-16, gridSize*3-16);
+                boss.waves.forEach(w => {
+                    ctx.beginPath();
+                    ctx.arc(boss.x*gridSize + 30, boss.y*gridSize + 30, w.r, 0, Math.PI*2);
+                    ctx.strokeStyle = `hsla(0, 100%, 50%, ${1 - w.r/150})`;
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                });
+            }
+
+            ctx.fillStyle = '#ff00ff'; ctx.shadowBlur = 15; ctx.shadowColor = '#ff00ff';
+            ctx.fillRect(food.x*gridSize+4, food.y*gridSize+4, gridSize-8, gridSize-8);
+
+            // 磁鐵視覺圈 (修復：確保範圍正確並增加霓虹感)
+            if (magnetTimer > 0) {
+                const bVal = (Math.sin(frameCount * 0.2) + 1) * 5;
+                ctx.shadowBlur = 15 + bVal;
+                ctx.shadowColor = varColor('--neon-blue');
+                ctx.strokeStyle = varColor('--neon-blue');
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 10]);
+                ctx.beginPath();
+                // 以蛇頭為中心繪製 6 格範圍的圈 (6 * 20 = 120px 半徑)
+                ctx.arc(snake[0].x*gridSize+10, snake[0].y*gridSize+10, 120, 0, Math.PI*2);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                
+                // 磁性吸引粒子
+                if (frameCount % 3 === 0) {
+                    ctx.fillStyle = varColor('--neon-blue');
+                    ctx.fillRect(snake[0].x*gridSize + Math.random()*20, snake[0].y*gridSize + Math.random()*20, 3, 3);
+                }
+            }
+
+            const isBlink = isInvincible && Math.floor(frameCount / 4) % 2 === 0;
+            snake.forEach((s, i) => {
+                if (isBlink) ctx.fillStyle = 'rgba(255,255,255,0.2)';
+                else {
+                    ctx.fillStyle = i === 0 ? '#fff' : `hsl(${hue}, 100%, 50%)`;
+                    ctx.shadowBlur = i === 0 ? 20 : 10; ctx.shadowColor = `hsl(${hue}, 100%, 50%)`;
+                }
+                ctx.fillRect(s.x*gridSize+1, s.y*gridSize+1, gridSize-2, gridSize-2);
+            });
+
+            if (perfectEffectTimer > 0) {
+                ctx.shadowBlur = 15; ctx.shadowColor = '#00f2ff'; ctx.fillStyle = '#fff';
+                ctx.font = 'bold 24px Courier'; ctx.textAlign = 'center';
+                ctx.fillText('PERFECT BEAT!', canvas.width/2, canvas.height/2 - (perfectEffectTimer/40)*20);
+                perfectEffectTimer--;
+            }
+
+            ctx.shadowBlur = 0;
+            requestAnimationFrame(draw);
+        }
+
+        function varColor(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+        function updateUI() {
+            scoreEl.innerText = score.toString().padStart(3, '0');
+            layerEl.innerText = audio.layer;
+            livesEl.innerText = '❤️x' + (lives + 1);
+            shieldEl.innerText = shields;
+            progressEl.style.width = (audio.layer / 60 * 100) + '%';
+            document.getElementById('level-num').innerText = boss.active ? "FINAL" : Math.floor(audio.layer / 5) + 1;
+        }
+
+        function winGame() {
+            isGameClear = true; clearInterval(gameLoop); clearInterval(timerInterval);
+            audio.playWin(); bossHpBar.style.display = 'none';
+            document.getElementById('clear-time').innerText = timerEl.innerText;
+            document.getElementById('victory-screen').classList.remove('hidden');
+        }
+
+        function endGame() {
+            isGameOver = true; audio.stop(); clearInterval(gameLoop); clearInterval(timerInterval);
+            document.getElementById('game-over-screen').classList.remove('hidden');
+        }
+
+        function saveScore(name, timeString) {
+            const leaderboard = JSON.parse(localStorage.getItem('snake_leaderboard_final') || '[]');
+            const parts = timeString.split(':');
+            const seconds = parseInt(parts[0]) * 60 + parseInt(parts[1]);
+            leaderboard.push({ name: name || 'PLAYER', time: timeString, seconds: seconds });
+            leaderboard.sort((a, b) => a.seconds - b.seconds);
+            localStorage.setItem('snake_leaderboard_final', JSON.stringify(leaderboard.slice(0, 3)));
+            showLeaderboard();
+        }
+
+        function showLeaderboard() {
+            const leaderboard = JSON.parse(localStorage.getItem('snake_leaderboard_final') || '[]');
+            const table = document.getElementById('leaderboard-body');
+            table.innerHTML = `<tr><th>RANK</th><th>NAME</th><th>TIME</th></tr>`;
+            leaderboard.forEach((r, i) => {
+                table.innerHTML += `<tr class="${i===0?'gold':''}"><td>#${i+1}</td><td>${r.name}</td><td>${r.time}</td></tr>`;
+            });
+            document.getElementById('victory-screen').classList.add('hidden');
+            document.getElementById('leaderboard-screen').classList.remove('hidden');
+        }
+
+        window.addEventListener('keydown', e => {
+            if (isGameOver || isGameClear) return;
+            if (e.code === 'Space' || e.key === ' ') { e.preventDefault(); triggerManualInvincibility(); }
+            switch(e.key) {
+                case 'ArrowUp': case 'w': if (dy === 0) { dx = 0; dy = -1; } break;
+                case 'ArrowDown': case 's': if (dy === 0) { dx = 0; dy = 1; } break;
+                case 'ArrowLeft': case 'a': if (dx === 0) { dx = -1; dy = 0; } break;
+                case 'ArrowRight': case 'd': if (dx === 0) { dx = 1; dy = 0; } break;
+            }
+        });
+
+        document.getElementById('start-btn').addEventListener('click', () => {
+            document.getElementById('start-screen').classList.add('hidden');
+            initGame(true); audio.start(); gameLoop = setInterval(update, baseSpeed);
+        });
+        document.getElementById('restart-btn').addEventListener('click', () => {
+            document.getElementById('game-over-screen').classList.add('hidden');
+            initGame(true); audio.start(); gameLoop = setInterval(update, baseSpeed);
+        });
+        document.getElementById('restart-from-rank-btn').addEventListener('click', () => {
+            document.getElementById('leaderboard-screen').classList.add('hidden');
+            initGame(true); audio.start(); gameLoop = setInterval(update, baseSpeed);
+        });
+        document.getElementById('submit-score-btn').addEventListener('click', () => {
+            saveScore(document.getElementById('player-name').value, document.getElementById('clear-time').innerText);
+        });
+
+        requestAnimationFrame(draw);
+    </script>
+</body>
+</html>
